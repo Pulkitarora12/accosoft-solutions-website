@@ -30,12 +30,12 @@ server/leads.db
 node_modules/
 dist/
 
-# Temp / Scraped assets in root
-logo of as.html
-logo of as_files/
-image.png
-photo 2.avif
-photo 3.avif
-photo 4.png
-photo 5.png
-photo1.avif
+# Temp / Scraped assets in client
+client/logo of as.html
+client/logo of as_files/
+client/image.png
+client/photo 2.avif
+client/photo 3.avif
+client/photo 4.png
+client/photo 5.png
+client/photo1.avif
