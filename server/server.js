@@ -36,6 +36,7 @@ app.use((req, res, next) => {
 const allowedOrigins = [
   'https://accosoftsolutions.com',
   'https://www.accosoftsolutions.com',
+  'https://main.accosoftsolutions.com',
   'http://localhost:5173'
 ];
 
@@ -102,7 +103,7 @@ function logAudit(req, endpoint, status, details = '') {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const timestamp = new Date().toISOString();
   const logLine = `[${timestamp}] IP: ${ip} | Endpoint: ${endpoint} | Status: ${status ? 'SUCCESS' : 'FAILURE'} | Details: ${details}\n`;
-  
+
   console.log(logLine.trim());
   fs.appendFile(auditLogPath, logLine, (err) => {
     if (err) {
@@ -138,7 +139,7 @@ function authenticateAdmin(req, res, next) {
     logAudit(req, '/api/leads', false, 'Invalid session token.');
     return res.status(403).json({ error: 'Invalid or expired session token.' });
   }
-  
+
   // Expiry check: 2 hours
   const twoHours = 2 * 60 * 60 * 1000;
   if (Date.now() - session.createdAt > twoHours) {
@@ -146,7 +147,7 @@ function authenticateAdmin(req, res, next) {
     logAudit(req, '/api/leads', false, 'Expired session token.');
     return res.status(403).json({ error: 'Invalid or expired session token.' });
   }
-  
+
   next();
 }
 
@@ -311,7 +312,7 @@ async function sendLeadNotification(lead) {
     const pageLogs = lead.pageHistory
       ? lead.pageHistory.map(p => `<li><code>${escapeHtml(p.path)}</code> (${p.duration ? escapeHtml(String(p.duration)) + 's' : 'Active'})</li>`).join('')
       : 'None';
-      
+
     const searchLogs = lead.searchHistory
       ? lead.searchHistory.map(s => `<li>Query: <strong>"${escapeHtml(s.query)}"</strong> on <code>${escapeHtml(s.path)}</code></li>`).join('')
       : 'None';
