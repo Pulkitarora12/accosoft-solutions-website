@@ -1,0 +1,41 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Backend secrets and DB
+server/.env
+server/leads.db
+*.db
+node_modules/
+dist/
+
+# Temp / Scraped assets in root
+logo of as.html
+logo of as_files/
+image.png
+photo 2.avif
+photo 3.avif
+photo 4.png
+photo 5.png
+photo1.avif
