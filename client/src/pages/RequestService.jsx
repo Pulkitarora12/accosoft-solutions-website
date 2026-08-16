@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Mail, Phone, MapPin, CheckCircle, ShieldCheck, Clock, Send, AlertTriangle } from 'lucide-react';
-import emailjs from '@emailjs/browser';
 import PageHeader from '../components/PageHeader';
 import { servicesData } from '../data/services';
 
@@ -76,26 +75,10 @@ export default function RequestService() {
       setIsSubmitting(true);
       setSubmitStatus(null);
 
-      /*
-        -------------------------------------------------------------
-        📧 EMAILJS INTEGRATION DESK
-        -------------------------------------------------------------
-        To receive submissions directly in your company inbox:
-        1. Create a free account at https://www.emailjs.com/
-        2. Set up your email service (e.g. Gmail / Outlook).
-        3. Create an email template matching the fields:
-           - fullName, company, email, phone, service, message, preference
-        4. Populate the credentials below and uncomment the code block:
-      */
-
-      const EMAILJS_SERVICE_ID = 'service_5mph7s9';
-      const EMAILJS_TEMPLATE_ID = 'template_kebn4vg';
-      const EMAILJS_PUBLIC_KEY = 'asfkH7VIhO4L6cZKs';
-
-      emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ID,
-        {
+      fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           fullName: formData.fullName,
           company: formData.company || 'Not Specified',
           email: formData.email,
@@ -103,29 +86,31 @@ export default function RequestService() {
           service: formData.service,
           message: formData.message,
           preference: formData.preference
-        },
-        EMAILJS_PUBLIC_KEY
-      )
-      .then((response) => {
-        console.log('EmailJS response success:', response.status, response.text);
-        setIsSubmitting(false);
-        setSubmitStatus('success');
-        setFormData({
-          fullName: '',
-          company: '',
-          email: '',
-          phone: '',
-          service: '',
-          message: '',
-          preference: 'email',
-          _honeypot: ''
-        });
+        })
       })
-      .catch((err) => {
-        console.error('EmailJS error sending message:', err);
-        setIsSubmitting(false);
-        setSubmitStatus('error');
-      });
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to submit');
+          return res.json();
+        })
+        .then(() => {
+          setIsSubmitting(false);
+          setSubmitStatus('success');
+          setFormData({
+            fullName: '',
+            company: '',
+            email: '',
+            phone: '',
+            service: '',
+            message: '',
+            preference: 'email',
+            _honeypot: ''
+          });
+        })
+        .catch((err) => {
+          console.error('Error sending enquiry:', err);
+          setIsSubmitting(false);
+          setSubmitStatus('error');
+        });
     }
   };
 

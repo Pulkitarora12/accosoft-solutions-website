@@ -20,6 +20,52 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const auditLogPath = path.join(__dirname, 'audit.log');
 
+// SMTP transporter (shared across all outbound mail)
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = process.env.SMTP_PORT;
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const notificationEmail = process.env.NOTIFICATION_EMAIL || smtpUser;
+
+let transporter = null;
+if (smtpHost && smtpUser && smtpPass) {
+  transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: parseInt(smtpPort) || 587,
+    secure: parseInt(smtpPort) === 465, // true for port 465 (SSL), false for port 587 (STARTTLS)
+    auth: {
+      user: smtpUser,
+      pass: smtpPass
+    }
+  });
+} else {
+  console.log('SMTP config not provided in .env. Outbound emails will be logged to console only.');
+}
+
+// Generic mail sender used by all form endpoints
+async function sendMail({ subject, text, html, replyTo }) {
+  console.log('--- EMAIL NOTIFICATION ---');
+  console.log(subject);
+  console.log(text);
+  console.log('--------------------------');
+
+  if (!transporter) {
+    console.log('Skipping real email transmission (SMTP not configured).');
+    return;
+  }
+
+  await transporter.sendMail({
+    from: `"Accosoft Solutions Website" <${smtpUser}>`,
+    to: notificationEmail,
+    replyTo,
+    subject,
+    text,
+    html
+  });
+
+  console.log(`Email sent successfully: ${subject}`);
+}
+
 // Apply security headers
 app.use(helmet());
 
@@ -267,12 +313,6 @@ app.get('/api/leads', authenticateAdmin, async (req, res) => {
 
 // Email Notification Function
 async function sendLeadNotification(lead) {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const targetEmail = process.env.NOTIFICATION_EMAIL;
-
   const summary = `
     New Business Lead Captured:
     --------------------------------
@@ -289,27 +329,7 @@ async function sendLeadNotification(lead) {
     - Searches Performed: ${lead.searchHistory ? lead.searchHistory.length : 0}
   `;
 
-  console.log('--- SALES NOTIFICATION ---');
-  console.log(summary);
-  console.log('--------------------------');
-
-  if (!smtpHost || !smtpUser || !smtpPass || !targetEmail) {
-    console.log('SMTP config not provided in .env. Skipping real email transmission (logged to console above).');
-    return;
-  }
-
   try {
-    const isSecure = parseInt(smtpPort) === 465;
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(smtpPort) || 587,
-      secure: isSecure, // true for port 465 (SSL), false for port 587 (STARTTLS)
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      }
-    });
-
     const pageLogs = lead.pageHistory
       ? lead.pageHistory.map(p => `<li><code>${escapeHtml(p.path)}</code> (${p.duration ? escapeHtml(String(p.duration)) + 's' : 'Active'})</li>`).join('')
       : 'None';
@@ -352,19 +372,149 @@ async function sendLeadNotification(lead) {
       </div>
     `;
 
-    await transporter.sendMail({
-      from: `"Accosoft Leads Notification" <${smtpUser}>`,
-      to: targetEmail,
+    await sendMail({
       subject: `[New Lead] ${lead.name} - Roadmap Inquiry`,
       text: summary,
-      html: htmlContent
+      html: htmlContent,
+      replyTo: lead.email
     });
-
-    console.log(`Lead notification email sent successfully to: ${targetEmail}`);
   } catch (err) {
     console.error('Failed to transmit lead notification email:', err);
   }
 }
+
+// 4. Consultation Request Endpoint (Request Service page)
+app.post('/api/contact', leadsLimiter, async (req, res) => {
+  const { fullName, company, email, phone, service, message, preference } = req.body;
+
+  if (!fullName || !email || !phone || !service || !message) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  const escapedName = escapeHtml(fullName);
+  const escapedCompany = escapeHtml(company || 'Not Specified');
+  const escapedEmail = escapeHtml(email);
+  const escapedPhone = escapeHtml(phone);
+  const escapedService = escapeHtml(service);
+  const escapedMessage = escapeHtml(message);
+  const escapedPreference = escapeHtml(preference || 'email');
+
+  const text = `New Consultation Request\n--------------------------------\nName: ${fullName}\nCompany: ${company || 'Not Specified'}\nEmail: ${email}\nPhone: ${phone}\nService Requested: ${service}\nPreferred Contact: ${preference || 'email'}\n\nMessage:\n${message}`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-top: 4px solid #f5821f; border-radius: 6px; padding: 20px;">
+      <h2 style="color: #0b2f52; margin-top: 0;">📋 New Consultation Request</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold; width: 140px;">Name:</td><td style="padding: 8px;">${escapedName}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Company:</td><td style="padding: 8px;">${escapedCompany}</td></tr>
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;"><a href="mailto:${escapedEmail}">${escapedEmail}</a></td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Phone:</td><td style="padding: 8px;">${escapedPhone}</td></tr>
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold;">Service Requested:</td><td style="padding: 8px;">${escapedService}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Preferred Contact:</td><td style="padding: 8px;">${escapedPreference}</td></tr>
+      </table>
+      <h4 style="color: #0b2f52; border-bottom: 1px solid #ddd; padding-bottom: 6px;">Message:</h4>
+      <p style="white-space: pre-wrap;">${escapedMessage}</p>
+    </div>
+  `;
+
+  try {
+    await sendMail({
+      subject: `[Consultation Request] ${fullName} - ${service}`,
+      text,
+      html,
+      replyTo: email
+    });
+    res.status(201).json({ success: true, message: 'Enquiry sent successfully.' });
+  } catch (err) {
+    console.error('Error sending contact enquiry email:', err);
+    res.status(500).json({ error: 'Failed to send enquiry.' });
+  }
+});
+
+// 5. Job Application Endpoint (Careers page)
+app.post('/api/careers', leadsLimiter, async (req, res) => {
+  const { fullName, email, phone, position, coverLetter } = req.body;
+
+  if (!fullName || !email || !phone || !position) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  const escapedName = escapeHtml(fullName);
+  const escapedEmail = escapeHtml(email);
+  const escapedPhone = escapeHtml(phone);
+  const escapedPosition = escapeHtml(position);
+  const escapedCoverLetter = escapeHtml(coverLetter || 'Not Provided');
+
+  const text = `New Job Application\n--------------------------------\nName: ${fullName}\nEmail: ${email}\nPhone: ${phone}\nPosition: ${position}\n\nCover Letter:\n${coverLetter || 'Not Provided'}`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-top: 4px solid #f5821f; border-radius: 6px; padding: 20px;">
+      <h2 style="color: #0b2f52; margin-top: 0;">💼 New Job Application</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold; width: 140px;">Name:</td><td style="padding: 8px;">${escapedName}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;"><a href="mailto:${escapedEmail}">${escapedEmail}</a></td></tr>
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold;">Phone:</td><td style="padding: 8px;">${escapedPhone}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Position:</td><td style="padding: 8px;">${escapedPosition}</td></tr>
+      </table>
+      <h4 style="color: #0b2f52; border-bottom: 1px solid #ddd; padding-bottom: 6px;">Cover Letter:</h4>
+      <p style="white-space: pre-wrap;">${escapedCoverLetter}</p>
+    </div>
+  `;
+
+  try {
+    await sendMail({
+      subject: `[Job Application] ${fullName} - ${position}`,
+      text,
+      html,
+      replyTo: email
+    });
+    res.status(201).json({ success: true, message: 'Application submitted successfully.' });
+  } catch (err) {
+    console.error('Error sending job application email:', err);
+    res.status(500).json({ error: 'Failed to submit application.' });
+  }
+});
+
+// 6. Client Review / Testimonial Endpoint (Home page)
+app.post('/api/feedback', leadsLimiter, async (req, res) => {
+  const { fullName, company, rating, message } = req.body;
+
+  if (!fullName || !message) {
+    return res.status(400).json({ error: 'Missing required fields.' });
+  }
+
+  const escapedName = escapeHtml(fullName);
+  const escapedCompany = escapeHtml(company || 'Not Specified');
+  const escapedRating = escapeHtml(rating ? `${rating} / 5` : 'Not Rated');
+  const escapedMessage = escapeHtml(message);
+
+  const text = `New Client Review\n--------------------------------\nName: ${fullName}\nCompany: ${company || 'Not Specified'}\nRating: ${rating ? `${rating} / 5` : 'Not Rated'}\n\nReview:\n${message}`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-top: 4px solid #f5821f; border-radius: 6px; padding: 20px;">
+      <h2 style="color: #0b2f52; margin-top: 0;">⭐ New Client Review</h2>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold; width: 140px;">Name:</td><td style="padding: 8px;">${escapedName}</td></tr>
+        <tr><td style="padding: 8px; font-weight: bold;">Company:</td><td style="padding: 8px;">${escapedCompany}</td></tr>
+        <tr style="background-color: #f9f9f9;"><td style="padding: 8px; font-weight: bold;">Rating:</td><td style="padding: 8px;">${escapedRating}</td></tr>
+      </table>
+      <h4 style="color: #0b2f52; border-bottom: 1px solid #ddd; padding-bottom: 6px;">Review:</h4>
+      <p style="white-space: pre-wrap;">${escapedMessage}</p>
+    </div>
+  `;
+
+  try {
+    await sendMail({
+      subject: `[Client Review] ${fullName}`,
+      text,
+      html
+    });
+    res.status(201).json({ success: true, message: 'Review submitted successfully.' });
+  } catch (err) {
+    console.error('Error sending review email:', err);
+    res.status(500).json({ error: 'Failed to submit review.' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Express server running on http://localhost:${PORT}`);

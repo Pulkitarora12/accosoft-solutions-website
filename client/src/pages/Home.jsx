@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Shield, Award, Clock, Users, ArrowUpRight, BarChart, Settings, Check, AlertTriangle, Star } from 'lucide-react';
-import emailjs from '@emailjs/browser';
 import ImageRotator from '../components/ImageRotator';
 import LogoMarquee from '../components/LogoMarquee';
 import StatsCounter from '../components/StatsCounter';
@@ -73,40 +72,33 @@ export default function Home() {
     setFeedbackErrors({});
     setIsSubmittingFeedback(true);
 
-    const EMAILJS_SERVICE_ID = 'service_5mph7s9';
-    const EMAILJS_TEMPLATE_ID = 'template_kebn4vg';
-    const EMAILJS_PUBLIC_KEY = 'asfkH7VIhO4L6cZKs';
-
-    const templateParams = {
-      fullName: feedbackName,
-      company: feedbackCompany || 'Not Specified',
-      email: 'review-submission@accosoft.com',
-      phone: `Rating: ${feedbackRating || 'Not Rated'} Stars`,
-      service: 'Client Review / Testimonial Submission',
-      message: feedbackMessage,
-      preference: 'email'
-    };
-
-    emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_ID,
-      templateParams,
-      EMAILJS_PUBLIC_KEY
-    )
-    .then((response) => {
-      console.log('EmailJS review submission success:', response.status, response.text);
-      setIsSubmittingFeedback(false);
-      setFeedbackSubmitStatus('success');
-      setFeedbackName('');
-      setFeedbackCompany('');
-      setFeedbackRating(0);
-      setFeedbackMessage('');
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: feedbackName,
+        company: feedbackCompany || 'Not Specified',
+        rating: feedbackRating || null,
+        message: feedbackMessage
+      })
     })
-    .catch((err) => {
-      console.error('EmailJS review submission error:', err);
-      setIsSubmittingFeedback(false);
-      setFeedbackSubmitStatus('error');
-    });
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to submit');
+        return res.json();
+      })
+      .then(() => {
+        setIsSubmittingFeedback(false);
+        setFeedbackSubmitStatus('success');
+        setFeedbackName('');
+        setFeedbackCompany('');
+        setFeedbackRating(0);
+        setFeedbackMessage('');
+      })
+      .catch((err) => {
+        console.error('Error submitting review:', err);
+        setIsSubmittingFeedback(false);
+        setFeedbackSubmitStatus('error');
+      });
   };
 
   return (

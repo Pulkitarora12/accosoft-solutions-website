@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Briefcase, MapPin, Clock, ArrowRight, X, AlertTriangle, CheckCircle2, User, Mail, Phone, Award } from 'lucide-react';
-import emailjs from '@emailjs/browser';
 import PageHeader from '../components/PageHeader';
 import DiagonalBanner from '../components/DiagonalBanner';
 import { jobsData } from '../data/jobs';
@@ -83,32 +82,30 @@ export default function Careers() {
       setIsSubmitting(true);
       setSubmitStatus(null);
 
-      const EMAILJS_SERVICE_ID = 'service_5mph7s9';
-      const EMAILJS_TEMPLATE_ID = 'template_kebn4vg';
-      const EMAILJS_PUBLIC_KEY = 'asfkH7VIhO4L6cZKs';
-
-      emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ID,
-        {
+      fetch('/api/careers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           fullName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
           position: formData.position,
           coverLetter: formData.coverLetter || 'Not Provided'
-        },
-        EMAILJS_PUBLIC_KEY
-      )
-      .then((response) => {
-        console.log('EmailJS response success:', response.status, response.text);
-        setIsSubmitting(false);
-        setSubmitStatus('success');
+        })
       })
-      .catch((err) => {
-        console.error('EmailJS error sending application:', err);
-        setIsSubmitting(false);
-        setSubmitStatus('error');
-      });
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to submit');
+          return res.json();
+        })
+        .then(() => {
+          setIsSubmitting(false);
+          setSubmitStatus('success');
+        })
+        .catch((err) => {
+          console.error('Error sending application:', err);
+          setIsSubmitting(false);
+          setSubmitStatus('error');
+        });
     }
   };
 
